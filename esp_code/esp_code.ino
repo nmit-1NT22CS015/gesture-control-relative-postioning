@@ -66,7 +66,7 @@ void setup() {
 }
   
 void loop() {
-  Serial.println(connection);
+  // Serial.println(connection);
   while(connection==0){
     if(udp.listen(5555)){
       udp.onPacket([](AsyncUDPPacket p){
@@ -79,7 +79,7 @@ void loop() {
           sprintf(data,"Glove Thingi response Name:%s Key=%d",name,rando);
           udp.writeTo((uint8_t *)data,strlen(data),ip,udpPort);
         }
-        if(dat.startsWith("Glove Thingi auth") && p.length()==56 && strcmp(dat.substring(23,55).c_str(),computeMD5FromString(pass.c_str()+String((std::to_string(rando)).c_str())))==0){
+        if(dat.startsWith("Glove Thingi auth") && p.length()==55 && strcmp(dat.substring(23,55).c_str(),computeMD5FromString(pass.c_str()+String((std::to_string(rando)).c_str())))==0){
           IPAddress ip=p.remoteIP();
           udpPort = 5555;
           char data[100] ;//= "Glove Thingi auth Pass:1ba4bd159b11a825ef4e4b8a4d0a2b72"
@@ -88,7 +88,7 @@ void loop() {
           connection=true;
           rando=10000+esp_random()%90000;
         }
-        if(dat.startsWith("Glove Thingi override") && p.length()>66 && strcmp(dat.substring(27,59).c_str(),computeMD5FromString(UUID.c_str()+String((std::to_string(rando)).c_str())))==0){
+        if(dat.startsWith("Glove Thingi override") && p.length()>65 && strcmp(dat.substring(27,59).c_str(),computeMD5FromString(UUID.c_str()+String((std::to_string(rando)).c_str())))==0){
           IPAddress ip=p.remoteIP();
           udpPort = 5555;
           char data[100];//= "Glove Thingi override UUID:e98f70bf38dd94fb86cf7e344563dec9 Pass:idk"
@@ -99,7 +99,7 @@ void loop() {
           pass=pref.getString("pass","");
           rando=10000+esp_random()%90000;
         }
-        if(dat.startsWith("Glove Thingi name") && p.length()>62 && strcmp(dat.substring(23,55).c_str(),computeMD5FromString(UUID.c_str()+String((std::to_string(rando)).c_str())))==0){
+        if(dat.startsWith("Glove Thingi name") && p.length()>61 && strcmp(dat.substring(23,55).c_str(),computeMD5FromString(UUID.c_str()+String((std::to_string(rando)).c_str())))==0){
           IPAddress ip=p.remoteIP();
           udpPort = 5555;
           char data[100];//= "Glove Thingi name UUID:e98f70bf38dd94fb86cf7e344563dec9 Name:idk"

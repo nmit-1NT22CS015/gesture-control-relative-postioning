@@ -5,6 +5,7 @@
 #include<QDebug>
 #include <QtCore>
 #include <QCryptographicHash>
+#include <QInputDialog>
 #include <QApplication>
 #include <QUdpSocket>
 #include <QHostAddress>
@@ -18,43 +19,33 @@ QUdpSocket* lis;
 QFrame* f1;
 QVBoxLayout* l2;
 MainWindow* www;
-QHash<QString, QVariantList> devices;
-
-void pass(){
-    QFrame f;
-    f.setFrameStyle(QFrame::Box | QFrame::Raised);
-    QLineEdit l(&f);
-    QPushButton b(&f);
-    connect(&b,&QPushButton::clicked,www,[](QLineEdit l, QPushButton b){
-        QUdpSocket udpSocket;
-        QByteArray datagram = "Glove Thingi auth Pass:"+QString(QCryptographicHash::hash((l.text()+devices[b.text()].at(0).toString()).toUtf8(), QCryptographicHash::Md5).toHex()).toUtf8();
-        // QByteArray md5Hex = QString(hashResult.toHex()).toUtf8();
-
-        QHostAddress destinationAddress(devices[b.text()].at(1).toString());
-        quint16 destinationPort = 5555;
-        QLayoutItem* child;
-        while(l2->count()!=0)
-        {
-            child = l2->takeAt(0);
-            delete child;
-        }
-        devices.clear();
-        udpSocket.writeDatagram(datagram.data(), datagram.size(), destinationAddress, destinationPort);
-    });
-
-}
+QHash<QString, QList<QString>> devices;
 
 void func(QString name, QString key,QHostAddress ip){
     if(!devices.contains(name)){
-        // qCritical( "UDP");
-        QVariantList a;
+        QList<QString> a;
         a.append(key);
         a.append(ip.toString());
-        devices[name]=a;
         QPushButton *b=new QPushButton(name,f1);
-        connect(b,&QPushButton::clicked,www,&pass);
+        QString temp =b->text();
+        devices[name]=a;
+        QObject::connect(b,&QPushButton::clicked,b,[temp](){
+            bool ok;
+            QString text = QInputDialog::getText(www, ("Input Dialog"),
+                                                 ("Enter your name:"), QLineEdit::Normal,
+                                                 QDir::home().dirName(), &ok);
+            if (ok && !text.isEmpty()) {
+                QUdpSocket udpSocket;
+                QByteArray datagram = "Glove Thingi auth Pass:";
+                datagram +=QString(QCryptographicHash::hash((text+devices[temp][0]).toUtf8(), QCryptographicHash::Md5).toHex()).toUtf8();
+                QHostAddress destinationAddress(devices[temp][1]);
+                quint16 destinationPort = 5555;
+                qCritical( datagram);
+                udpSocket.writeDatagram(datagram.data(), datagram.size(), destinationAddress, destinationPort);
+            }
+        });
         f1->layout()->addWidget(b);
-        f1->show();
+        b->show();
     }
 }
 
