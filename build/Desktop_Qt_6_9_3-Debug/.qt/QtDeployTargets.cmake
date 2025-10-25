@@ -1,0 +1,2 @@
+set(__QT_DEPLOY_TARGET_Iot_Project_FILE /home/albin_melit/MyCodesig/Proj/Iot_Project/build/Desktop_Qt_6_9_3-Debug/Iot_Project)
+set(__QT_DEPLOY_TARGET_Iot_Project_TYPE EXECUTABLE)
