@@ -79,16 +79,16 @@ void loop() {
           sprintf(data,"Glove Thingi response Name:%s Key=%d",name,rando);
           udp.writeTo((uint8_t *)data,strlen(data),ip,udpPort);
         }
-        if(dat.startsWith("Glove Thingi auth") && p.length()==55 && strcmp(dat.substring(23,55).c_str(),computeMD5FromString(pass.c_str()+String((std::to_string(rando)).c_str())))==0){
+        if(dat.startsWith("Glove Thingi auth") && strcmp(dat.substring(23,55).c_str(),computeMD5FromString(pass.c_str()+String((std::to_string(rando)).c_str())))==0){
           IPAddress ip=p.remoteIP();
           udpPort = 5555;
           char data[100] ;//= "Glove Thingi auth Pass:1ba4bd159b11a825ef4e4b8a4d0a2b72"
-          sprintf(data,"Glove Thingi response Name:%s sucessfully connected",name);
+          sprintf(data,"Glove Thingi response sucessfully connected Name:%s",name);
           udp.writeTo((uint8_t *)data,strlen(data),ip,udpPort);
           connection=true;
           rando=10000+esp_random()%90000;
         }
-        if(dat.startsWith("Glove Thingi override") && p.length()>65 && strcmp(dat.substring(27,59).c_str(),computeMD5FromString(UUID.c_str()+String((std::to_string(rando)).c_str())))==0){
+        if(dat.startsWith("Glove Thingi override") && strcmp(dat.substring(27,59).c_str(),computeMD5FromString(UUID.c_str()+String((std::to_string(rando)).c_str())))==0){
           IPAddress ip=p.remoteIP();
           udpPort = 5555;
           char data[100];//= "Glove Thingi override UUID:e98f70bf38dd94fb86cf7e344563dec9 Pass:idk"
@@ -99,7 +99,7 @@ void loop() {
           pass=pref.getString("pass","");
           rando=10000+esp_random()%90000;
         }
-        if(dat.startsWith("Glove Thingi name") && p.length()>61 && strcmp(dat.substring(23,55).c_str(),computeMD5FromString(UUID.c_str()+String((std::to_string(rando)).c_str())))==0){
+        if(dat.startsWith("Glove Thingi name") && strcmp(dat.substring(23,55).c_str(),computeMD5FromString(UUID.c_str()+String((std::to_string(rando)).c_str())))==0){
           IPAddress ip=p.remoteIP();
           udpPort = 5555;
           char data[100];//= "Glove Thingi name UUID:e98f70bf38dd94fb86cf7e344563dec9 Name:idk"
@@ -126,9 +126,10 @@ void loop() {
   while(1){
       mySensor.accelUpdate();
       mySensor.gyroUpdate();
+      compass.read();
 
       // Print accelerometer
-      sprintf(data,"Glove Thingi values AX:%.3lf AY:%.3lf AZ:%.3lf\nGX:%.3lf GY:%.3lf GZ:%.3lf\nMX:%.3lf MY:%.3lf MZ:%.3lf",mySensor.accelX(),mySensor.accelY(),mySensor.accelZ(),mySensor.gyroX(),mySensor.gyroY(),mySensor.gyroZ(),compass.getX(),compass.getY(),compass.getZ());
+      sprintf(data,"Glove Thingi values %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %d %d %d",mySensor.accelX(),mySensor.accelY(),mySensor.accelZ(),mySensor.gyroX(),mySensor.gyroY(),mySensor.gyroZ(),compass.getX(),compass.getY(),compass.getZ());
       udp.writeTo((uint8_t *)data,strlen(data),ip,udpPort);
       delay(17);
   }

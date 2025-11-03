@@ -12,14 +12,26 @@
 #include <QPushButton>
 #include <QLineEdit>
 #include <QFrame>
+#include <cmath>
+// #include <chrono>
 #include <QVBoxLayout>
 
 
 QUdpSocket* lis;
 QFrame* f1;
 QVBoxLayout* l2;
+QString nam="";
 MainWindow* www;
 QHash<QString, QList<QString>> devices;
+bool connected=false;
+double PI = acos(-1.0);
+double pitch = 0, roll = 0, yaw = 0;  // Orientation angles (degrees)
+double Q_angle = 0.001;  // Process noise variance for the accelerometer
+double Q_bias = 0.003;   // Process noise variance for the gyroscope bias
+double R_measure = 0.03; // Measurement noise variance
+double angle = 0, bias = 0, rate = 0; // Kalman filter state variables
+double P[2][2] = {{0, 0}, {0, 0}};  // Error covariance matrix
+// chrono::time_point<chrono::system_clock> lastTime = 0;//std::chrono::system_clock::now();
 
 void func(QString name, QString key,QHostAddress ip){
     if(!devices.contains(name)){
@@ -40,7 +52,8 @@ void func(QString name, QString key,QHostAddress ip){
                 datagram +=QString(QCryptographicHash::hash((text+devices[temp][0]).toUtf8(), QCryptographicHash::Md5).toHex()).toUtf8();
                 QHostAddress destinationAddress(devices[temp][1]);
                 quint16 destinationPort = 5555;
-                qCritical( datagram);
+                nam=temp;
+                qCritical( temp.toUtf8());
                 udpSocket.writeDatagram(datagram.data(), datagram.size(), destinationAddress, destinationPort);
             }
         });
@@ -48,6 +61,39 @@ void func(QString name, QString key,QHostAddress ip){
         b->show();
     }
 }
+
+
+double Kalman_filter(double angle, double gyroRate, double accelAngle) {
+    // Predict
+    rate = gyroRate - bias;
+    angle += 0.020 * rate; //0.020 is the time diff thingi
+
+    P[0][0] += 0.020 * (0.020 * P[1][1] - P[0][1] - P[1][0] + Q_angle);
+    P[0][1] -= 0.020 * P[1][1];
+    P[1][0] -= 0.020 * P[1][1];
+    P[1][1] += Q_bias *0.020 ;
+
+    // Update
+    double S = P[0][0] + R_measure; // Estimate error
+    double K[2];                    // Kalman gain
+    K[0] = P[0][0] / S;
+    K[1] = P[1][0] / S;
+
+    double y = accelAngle - angle; // Angle difference
+    angle += K[0] * y;
+    bias += K[1] * y;
+
+    double P00_temp = P[0][0];
+    double P01_temp = P[0][1];
+
+    P[0][0] -= K[0] * P00_temp;
+    P[0][1] -= K[0] * P01_temp;
+    P[1][0] -= K[1] * P00_temp;
+    P[1][1] -= K[1] * P01_temp;
+
+    return angle;
+}
+
 
 class Thread : public QThread
 {
@@ -88,11 +134,63 @@ public slots:
                 }
                 func(name,key,sender);
             }
+            if(s.startsWith("Glove Thingi response sucessfully connected Name:")){
+                QString name="";
+                int i=49;
+                while(i<s.length() && s[i]!=' '){
+                    name=name.append(s[i++]);
+                }
+                if(nam==name) {
+                    connected=true;}
+
+            }
+            if(s.startsWith("Glove Thingi values ") && devices.contains(nam) && sender.toString()==devices[nam][1] && connected==true){
+
+                // qCritical("val.toUtf8()");
+                QString val=s.slice(20);
+                // qCritical(val.toUtf8());
+                QList<float> l;
+                foreach(QString num,val.split(" ")){
+                    l.append(num.toFloat());
+                }
+
+                // chrono::time_point<chrono::system_clock> currentTime = millis();
+                // if(lastTime==0){lastTime=currentTime-10;}
+                // dt = (currentTime - lastTime) / 1000.0; // Calculate time in seconds
+                // if (dt == 0) dt = 0.001;               // Prevent division by zero
+                // lastTime = currentTime;
+                double op=ptich,oy=yaw;
+                pitch = Kalman_filter(pitch, l[3], atan2(-l[0], sqrt(l[1] * l[1] + l[2] * l[2])) * 180.0 / PI);
+                roll = Kalman_filter(roll, l[4], atan2(l[1], l[2]) * 180.0 / PI);
+                int i=24;
+
+                // --- YAW CALCULATION USING MAGNETOMETER ---
+                yaw = atan2(l[7], l[6]); // Calculate yaw from magnetometer readings
+                float declinationAngle = -0.1783; // Declination in radians for -10° 13'
+                yaw += declinationAngle;          // Adjust for magnetic declination
+
+                // Normalize yaw to 0-360 degrees
+                if (yaw < 0) yaw += 2 * PI;
+                if (yaw > 2 * PI) yaw -= 2 * PI;
+                yaw = yaw * 180.0 / PI; // Convert yaw to degrees
+                qDebug(QString::number(pitch,'f',15).toUtf8());
+                qDebug(QString::number(roll,'f',15).toUtf8());
+                qDebug(QString::number(yaw,'f',15).toUtf8());
+                if(pitch!=0){
+                    mouseMove((pitch-op)/5,(yaw-oy)/5);
+                }
+
+                /*
+                while(i<s.length() && s[i]!=' '){
+                    name=name.append(s[i++]);
+                }
+                i+=5;
+                nam=name;*/
+            }
         }
     }
 
 };
-
 
 void ping(){
     QUdpSocket udpSocket;
