@@ -1,4 +1,14 @@
 #include "mainwindow.h"
+#include <QApplication>
+#include <QLocale>
+#include <QTranslator>
+#include <QScreen>
+#include "globalmouse.h"
+#include <iostream>
+#include <windows.h>
+#include <QTimer>
+#include <QPoint>
+
 // #include "thread2.cpp"
 
 #include <QWidget>
@@ -8,6 +18,8 @@
 #include <QInputDialog>
 #include <QApplication>
 #include <QUdpSocket>
+#include <QNetworkInterface>
+#include <QAbstractSocket>
 #include <QHostAddress>
 #include <QPushButton>
 #include <QLineEdit>
@@ -24,14 +36,24 @@ QString nam="";
 MainWindow* www;
 QHash<QString, QList<QString>> devices;
 bool connected=false;
-double PI = acos(-1.0);
+double PI = acos(-1.0) ,dt=0;
 double pitch = 0, roll = 0, yaw = 0;  // Orientation angles (degrees)
 double Q_angle = 0.001;  // Process noise variance for the accelerometer
 double Q_bias = 0.003;   // Process noise variance for the gyroscope bias
 double R_measure = 0.03; // Measurement noise variance
 double angle = 0, bias = 0, rate = 0; // Kalman filter state variables
 double P[2][2] = {{0, 0}, {0, 0}};  // Error covariance matrix
-// chrono::time_point<chrono::system_clock> lastTime = 0;//std::chrono::system_clock::now();
+double lastTime = 0;//std::chrono::system_clock::now();
+
+
+void cursor(int x, int y){
+    QPoint poss = QCursor::pos();
+    int xx = poss.x() + x;
+    int yy = poss.y() + y;
+    QScreen *screen=QGuiApplication::primaryScreen();
+    QCursor *cursor= new QCursor();
+    cursor->setPos(screen , xx,yy);
+}
 
 void func(QString name, QString key,QHostAddress ip){
     if(!devices.contains(name)){
@@ -66,12 +88,12 @@ void func(QString name, QString key,QHostAddress ip){
 double Kalman_filter(double angle, double gyroRate, double accelAngle) {
     // Predict
     rate = gyroRate - bias;
-    angle += 0.020 * rate; //0.020 is the time diff thingi
+    angle += dt * rate; //0.1 is the time diff thingi
 
-    P[0][0] += 0.020 * (0.020 * P[1][1] - P[0][1] - P[1][0] + Q_angle);
-    P[0][1] -= 0.020 * P[1][1];
-    P[1][0] -= 0.020 * P[1][1];
-    P[1][1] += Q_bias *0.020 ;
+    P[0][0] += dt * (0.020 * P[1][1] - P[0][1] - P[1][0] + Q_angle);
+    P[0][1] -= dt * P[1][1];
+    P[1][0] -= dt * P[1][1];
+    P[1][1] += Q_bias * dt ;
 
     // Update
     double S = P[0][0] + R_measure; // Estimate error
@@ -154,12 +176,12 @@ public slots:
                     l.append(num.toFloat());
                 }
 
-                // chrono::time_point<chrono::system_clock> currentTime = millis();
-                // if(lastTime==0){lastTime=currentTime-10;}
-                // dt = (currentTime - lastTime) / 1000.0; // Calculate time in seconds
-                // if (dt == 0) dt = 0.001;               // Prevent division by zero
-                // lastTime = currentTime;
-                double op=ptich,oy=yaw;
+                double currentTime = l[9];
+                if(lastTime==0){lastTime=currentTime-10;}
+                dt = (currentTime - lastTime) / 1000.0; // Calculate time in seconds
+                if (dt == 0) dt = 0.001;               // Prevent division by zero
+                lastTime = currentTime;
+                double op=pitch, oy=yaw;
                 pitch = Kalman_filter(pitch, l[3], atan2(-l[0], sqrt(l[1] * l[1] + l[2] * l[2])) * 180.0 / PI);
                 roll = Kalman_filter(roll, l[4], atan2(l[1], l[2]) * 180.0 / PI);
                 int i=24;
@@ -173,11 +195,13 @@ public slots:
                 if (yaw < 0) yaw += 2 * PI;
                 if (yaw > 2 * PI) yaw -= 2 * PI;
                 yaw = yaw * 180.0 / PI; // Convert yaw to degrees
-                qDebug(QString::number(pitch,'f',15).toUtf8());
-                qDebug(QString::number(roll,'f',15).toUtf8());
-                qDebug(QString::number(yaw,'f',15).toUtf8());
+                qDebug(QString::number(pitch,'f',15).toUtf8()+" "+QString::number(roll,'f',15).toUtf8()+" "+QString::number(yaw,'f',15).toUtf8()+" "+QString::number(l[9],'f',7).toUtf8());
+                // qDebug();
+                // qDebug();
+                // qDebug(QString::number(l[9],'f',7).toUtf8());
                 if(pitch!=0){
-                    mouseMove((pitch-op)/5,(yaw-oy)/5);
+
+                   cursor((int)(yaw-oy),(int)((pitch-op)>350?(-360-pitch+op)*7:(pitch-op)*7));
                 }
 
                 /*
@@ -195,8 +219,6 @@ public slots:
 void ping(){
     QUdpSocket udpSocket;
     QByteArray datagram = "Glove Thingi ping";
-    QHostAddress destinationAddress = QHostAddress::Broadcast;
-    quint16 destinationPort = 5555;
     QLayoutItem* child;
     while(l2->count()!=0)
     {
@@ -204,7 +226,25 @@ void ping(){
         delete child;
     }
     devices.clear();
-    udpSocket.writeDatagram(datagram.data(), datagram.size(), destinationAddress, destinationPort);
+    QList<QNetworkInterface> is = QNetworkInterface::allInterfaces();
+    // QNetworkInterface ai;
+    quint16 destinationPort = 5555;
+    for(const QNetworkInterface& i:is){
+        if(i.flags().testFlag(QNetworkInterface::IsUp) && !i.flags().testFlag(QNetworkInterface::IsLoopBack)){
+            for (const QNetworkAddressEntry &entry : i.addressEntries()) {
+                // Check if the address is IPv4 before getting the broadcast address
+                if (entry.ip().protocol() == QHostAddress::IPv4Protocol && !entry.broadcast().isNull()) {
+                    // QHostAddress broadcastAddress = entry.broadcast();
+                    // qCritical(i.name().toUtf8());
+                    udpSocket.writeDatagram(datagram.data(), datagram.size(), entry.broadcast(), destinationPort);
+                }
+            }
+            // ai = i;
+            // break;
+        }
+    }
+    // QHostAddress destinationAddress = ai.addressEntries().first().broadcast();//QHostAddress::Broadcast;
+    // qCritical(destinationAddress.toString().toUtf8());
 }
 
 int main(int argc, char *argv[])
@@ -230,3 +270,56 @@ int main(int argc, char *argv[])
     w.show();
     return a.exec();
 }
+
+
+// void values(){
+//     int xx = rand() % 1366;
+//     int yy = rand() % 768;
+//     cursor(xx,yy);
+// }
+
+// bool leftClick(bool clickHeld) {
+//     INPUT input = {0};
+//     input.type = INPUT_MOUSE;
+
+//     if (clickHeld) {
+//         input.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+//     } else {
+//         input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
+//     }
+//     SendInput(1, &input, sizeof(INPUT));
+//     return true;
+// }
+
+// bool rightClick(bool clickHeld) {
+//     INPUT input = {0};
+//     input.type = INPUT_MOUSE;
+
+//     if (clickHeld) {
+//         input.mi.dwFlags = MOUSEEVENTF_RIGHTDOWN;
+//     } else {
+//         input.mi.dwFlags = MOUSEEVENTF_RIGHTUP;
+//     }
+//     SendInput(1, &input, sizeof(INPUT));
+//     return true;
+// }
+
+// int main(int argc, char *argv[])
+// {
+//     QApplication a(argc, argv);
+//     MainWindow w;
+//     bool nn = true;
+//     // while(nn == true){
+//     //     values();
+//     // }
+
+//     leftClick(true);
+
+//     QTimer::singleShot(2000, []() {
+//         rightClick(false);
+//         qDebug() << "Simulating click-and-hold complete";
+//     });
+
+//     w.show();
+//     return a.exec();
+// }
