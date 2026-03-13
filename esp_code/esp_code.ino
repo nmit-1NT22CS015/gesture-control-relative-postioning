@@ -41,6 +41,8 @@ void setup() {
   // Begin WiFi
   // WiFi.begin(WIFI_SSID, WIFI_PASS);
   pinMode(2,OUTPUT);
+  pinMode(4,INPUT);
+  pinMode(5,INPUT);
   // Connecting to WiFi...
   // Serial.print("Connecting to ");
   // Serial.print(WIFI_SSID);
@@ -48,10 +50,10 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED)
   {
     digitalWrite(2,HIGH);
-    delay(100);
+    delay(1000);
 
     digitalWrite(2,LOW);
-    delay(100);
+    delay(1000);
     Serial.print(".");
   }
   
@@ -121,17 +123,36 @@ void loop() {
 
   mySensor.beginAccel();   // no return value
   mySensor.beginGyro();    // no return value
+  compass.setCalibrationOffsets(470.00,-99.00,1068.00);
+  compass.setCalibrationScales(1.07,1.10,0.86);
+  // compass.setSmoothing(10,true);
   delay(2000);
   char data[200];
+  int a=0;
+  float ax=0,ay=0,az=0,gx=0,gy=0,gz=0,mx=0,my=0,mz=0,omx=0,omy=0,omz=0;
   while(1){
       mySensor.accelUpdate();
       mySensor.gyroUpdate();
       compass.read();
-
+      ax+=mySensor.accelX()/10;
+      ay+=mySensor.accelY()/10;
+      az+=mySensor.accelZ()/10;
+      gx+=mySensor.gyroX()/10;
+      gy+=mySensor.gyroY()/10;
+      gz+=mySensor.gyroZ()/10;
+      mx+=compass.getX()/10;
+      my+=compass.getY()/10;
+      mz+=compass.getZ()/10;
       // Print accelerometer
-      sprintf(data,"Glove Thingi values %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %d %d %d",mySensor.accelX(),mySensor.accelY(),mySensor.accelZ(),mySensor.gyroX(),mySensor.gyroY(),mySensor.gyroZ(),compass.getX(),compass.getY(),compass.getZ());
-      udp.writeTo((uint8_t *)data,strlen(data),ip,udpPort);
-      delay(17);
+      if(a==9){
+        sprintf(data,"Glove Thingi values %lf %lf %lf %lf %lf %lf %lf %lf %lf %ld %d %d",ax,ay,az,gx,gy,gz,mx,my,mz,millis(),digitalRead(4),digitalRead(5));
+        // Serial.println(data);
+        udp.writeTo((uint8_t *)data,strlen(data),ip,udpPort);
+        a=-1;
+        ax=0;ay=0;az=0;gx=0;gy=0;gz=0;mx=0;my=0;mz=0;
+      }
+      a+=1;
+      // delay(7);
   }
   // put your main code here, to run repeatedly:
   
